@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Clinical Calculator</title>
+    
+    <!-- PWA Setup Links -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar and hide number arrows for cleaner look */
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            -webkit-tap-highlight-color: transparent;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        /* Smooth transitions for UI states */
+        .chip {
+            transition: all 0.2s ease-in-out;
+        }
+        .footer-card {
+            transition: background-color 0.3s ease;
+        }
+    </style>
+</head>
+<body class="font-sans flex flex-col min-h-screen pb-28">
+
+    <header class="p-4 border-b border-gray-800 bg-black sticky top-0 z-10">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-xl font-bold tracking-wide">IV Calc</h1>
+            <button id="btn-clear" class="text-sm text-gray-400 hover:text-white px-3 py-1 rounded bg-gray-800 active:bg-gray-700">Clear All</button>
+        </div>
+        
+        <div class="relative">
+            <select id="mode-selector" class="w-full bg-gray-900 border border-gray-700 text-white text-lg rounded-lg block p-3 appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <option value="weight_based_drip">Weight-Based Drip</option>
+                <option value="standard_drip">Standard Drip (Non-Weight)</option>
+                <option value="iv_push">Direct IV Push</option>
+                <option value="straight_fluid">Straight Fluid Bolus</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 p-4 space-y-6 max-w-2xl mx-auto w-full">
+        
+        <!-- Desired Dose -->
+        <div id="group-dose" class="input-group flex flex-col space-y-2 hidden">
+            <label class="text-gray-400 font-medium">Desired Dose <span id="label-dose-unit" class="text-blue-400"></span></label>
+            <input type="number" id="input-dose" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+        </div>
+
+        <!-- Weight -->
+        <div id="group-weight" class="input-group flex flex-col space-y-2 hidden">
+            <label class="text-gray-400 font-medium">Patient Weight <span class="text-blue-400">(kg)</span></label>
+            <input type="number" id="input-weight" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+        </div>
+
+        <!-- Concentration -->
+        <div id="group-concentration" class="input-group flex flex-col space-y-2 hidden">
+            <label class="text-gray-400 font-medium">Total Drug on Hand <span class="text-blue-400">(mg)</span></label>
+            <input type="number" id="input-concentration" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+        </div>
+
+        <!-- Vial Volume (For IV Push) -->
+        <div id="group-vial-volume" class="input-group flex flex-col space-y-2 hidden">
+            <label class="text-gray-400 font-medium">Vial Volume <span class="text-blue-400">(mL)</span></label>
+            <input type="number" id="input-vial-volume" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+        </div>
+
+        <!-- Bag Volume / Total Fluid -->
+        <div id="group-volume" class="input-group flex flex-col space-y-3 hidden">
+            <label class="text-gray-400 font-medium">Total Volume <span class="text-blue-400">(mL)</span></label>
+            <div class="grid grid-cols-4 gap-2">
+                <button class="chip volume-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="100">100</button>
+                <button class="chip volume-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="250">250</button>
+                <button class="chip volume-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="500">500</button>
+                <button class="chip volume-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="1000">1000</button>
+            </div>
+            <input type="number" id="input-volume" inputmode="decimal" placeholder="Custom mL..." class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-xl w-full focus:outline-none focus:border-blue-500 mt-2">
+        </div>
+
+        <!-- Time (For Straight Fluid) -->
+        <div id="group-time" class="input-group flex flex-col space-y-2 hidden">
+            <label class="text-gray-400 font-medium">Time <span class="text-blue-400">(Minutes)</span></label>
+            <input type="number" id="input-time" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+        </div>
+
+        <!-- Drip Set -->
+        <div id="group-drips" class="input-group flex flex-col space-y-3 hidden">
+            <label class="text-gray-400 font-medium">Drip Set <span class="text-blue-400">(gtt/mL)</span></label>
+            <div class="grid grid-cols-4 gap-2">
+                <button class="chip drip-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="10">10</button>
+                <button class="chip drip-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="15">15</button>
+                <button class="chip drip-chip bg-gray-800 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="20">20</button>
+                <button class="chip drip-chip bg-gray-800 border border-blue-900 text-blue-100 rounded-lg p-3 text-lg font-medium active:bg-gray-700" data-value="60">60 <span class="block text-xs text-blue-400">Micro</span></button>
+            </div>
+            <input type="hidden" id="input-drips" value="">
+        </div>
+
+    </main>
+
+    <!-- Sticky Footer Results -->
+    <footer id="result-footer" class="fixed bottom-0 w-full p-6 footer-card bg-gray-900 border-t border-gray-800 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20">
+        <div class="max-w-2xl mx-auto flex flex-col items-center justify-center text-center">
+            <span id="result-label" class="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-1">Awaiting Input</span>
+            <div id="result-value" class="text-4xl font-bold text-gray-500 tracking-tight">--</div>
+            <div id="result-error" class="hidden text-white font-medium mt-1"></div>
+        </div>
+    </footer>
+
+    <script>
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('ServiceWorker registered with scope:', registration.scope))
+                    .catch(error => console.error('ServiceWorker registration failed:', error));
+            });
+        }
+
+        // DOM Elements
+        const modeSelector = document.getElementById('mode-selector');
+        const allGroups = document.querySelectorAll('.input-group');
+        const inputs = {
+            desiredDose: document.getElementById('input-dose'),
+            weightKg: document.getElementById('input-weight'),
+            concentrationMg: document.getElementById('input-concentration'),
+            volumeMl: document.getElementById('input-volume'),
+            vialVolumeMl: document.getElementById('input-vial-volume'),
+            timeMinutes: document.getElementById('input-time'),
+            dripSetGtt: document.getElementById('input-drips')
+        };
+        const doseUnitLabel = document.getElementById('label-dose-unit');
+        
+        const footer = document.getElementById('result-footer');
+        const resultLabel = document.getElementById('result-label');
+        const resultValue = document.getElementById('result-value');
+        const resultError = document.getElementById('result-error');
+
+        // Mode Configuration Definition
+        const modeConfig = {
+            weight_based_drip: {
+                fields: ['group-dose', 'group-weight', 'group-concentration', 'group-volume', 'group-drips'],
+                doseUnit: '(mcg/kg/min)'
+            },
+            standard_drip: {
+                fields: ['group-dose', 'group-concentration', 'group-volume', 'group-drips'],
+                doseUnit: '(mg/min)'
+            },
+            iv_push: {
+                fields: ['group-dose', 'group-concentration', 'group-vial-volume'],
+                doseUnit: '(mg)'
+            },
+            straight_fluid: {
+                fields: ['group-volume', 'group-time', 'group-drips'],
+                doseUnit: '' // Unused
+            }
+        };
+
+        // Initialization & Event Listeners
+        function init() {
+            modeSelector.addEventListener('change', handleModeChange);
+            document.getElementById('btn-clear').addEventListener('click', clearAll);
+
+            // Listen to standard inputs
+            Object.values(inputs).forEach(input => {
+                if(input) input.addEventListener('input', runCalculation);
+            });
+
+            // Set up Quick Tap Chips
+            setupChips('volume-chip', 'input-volume');
+            setupChips('drip-chip', 'input-drips');
+
+            // Force initial layout
+            handleModeChange();
+        }
+
+        // Chip logic (Buttons that update a hidden/visible input field)
+        function setupChips(chipClass, targetInputId) {
+            const chips = document.querySelectorAll(`.${chipClass}`);
+            const targetInput = document.getElementById(targetInputId);
+
+            chips.forEach(chip => {
+                chip.addEventListener('click', (e) => {
+                    // Update input value
+                    targetInput.value = e.currentTarget.getAttribute('data-value');
+                    
+                    // Highlight selected chip
+                    chips.forEach(c => {
+                        c.classList.remove('bg-blue-600', 'text-white', 'border-transparent');
+                        c.classList.add('bg-gray-800');
+                    });
+                    e.currentTarget.classList.remove('bg-gray-800');
+                    e.currentTarget.classList.add('bg-blue-600', 'text-white', 'border-transparent');
+
+                    // Manually trigger calculation since value changed programmatically
+                    runCalculation();
+                });
+            });
+
+            // If user types custom value, remove chip highlights
+            if(targetInput.type !== 'hidden') {
+                targetInput.addEventListener('input', () => {
+                    chips.forEach(c => {
+                        c.classList.remove('bg-blue-600', 'text-white', 'border-transparent');
+                        c.classList.add('bg-gray-800');
+                    });
+                });
+            }
+        }
+
+        // UI Updates
+        function handleModeChange() {
+            const mode = modeSelector.value;
+            const config = modeConfig[mode];
+
+            // Hide all, then show required fields
+            allGroups.forEach(group => group.classList.add('hidden'));
+            config.fields.forEach(id => document.getElementById(id).classList.remove('hidden'));
+
+            // Update Dynamic Labels
+            if (config.doseUnit) {
+                doseUnitLabel.textContent = config.doseUnit;
+            }
+
+            // Clear inputs and result when switching modes for safety
+            clearAllInputs();
+            setNeutralState();
+        }
+
+        function clearAll() {
+            clearAllInputs();
+            
+            // Reset chips
+            document.querySelectorAll('.chip').forEach(c => {
+                c.classList.remove('bg-blue-600', 'text-white', 'border-transparent');
+                c.classList.add('bg-gray-800');
+            });
+            
+            setNeutralState();
+        }
+
+        function clearAllInputs() {
+            Object.values(inputs).forEach(input => {
+                if (input) input.value = '';
+            });
+        }
+
+        // Core Logic Provided by User
+        function calculateClinicalDose(mode, params) {
+            const requireNumbers = (keys) => {
+                for (const key of keys) {
+                    if (typeof params[key] !== 'number' || isNaN(params[key]) || params[key] <= 0) {
+                        throw new Error('Invalid or missing inputs.');
+                    }
+                }
+            };
+            
+            const validateDripSet = (dripSetGtt) => {
+                if (![10, 15, 20, 60].includes(dripSetGtt)) throw new Error("Invalid drip set. Select a standard set.");
+            };
+            
+            const validateAndRoundDripRate = (rawRate) => {
+                const roundedRate = Math.round(rawRate);
+                if (roundedRate > 200) throw new Error(`Rate too fast (${roundedRate} gtt/min). Infusion pump required.`);
+                return roundedRate;
+            };
+
+            switch (mode) {
+                case 'weight_based_drip':
+                    requireNumbers(['desiredDose', 'weightKg', 'volumeMl', 'concentrationMg', 'dripSetGtt']);
+                    validateDripSet(params.dripSetGtt);
+                    if (params.weightKg > 600 || params.volumeMl > 2000) throw new Error("Parameters exceed max safety limits.");
+                    
+                    const concentrationMcg = params.concentrationMg * 1000;
+                    return { 
+                        result: validateAndRoundDripRate((params.desiredDose * params.weightKg * params.volumeMl / concentrationMcg) * params.dripSetGtt), 
+                        unit: 'gtt/min' 
+                    };
+
+                case 'standard_drip':
+                    requireNumbers(['desiredDose', 'volumeMl', 'concentrationMg', 'dripSetGtt']);
+                    validateDripSet(params.dripSetGtt);
+                    if (params.volumeMl > 2000) throw new Error("Parameters exceed max safety limits.");
+                    
+                    return { 
+                        result: validateAndRoundDripRate((params.desiredDose * params.volumeMl / params.concentrationMg) * params.dripSetGtt), 
+                        unit: 'gtt/min' 
+                    };
+
+                case 'iv_push':
+                    requireNumbers(['desiredDose', 'concentrationMg', 'vialVolumeMl']);
+                    const mgPerMl = params.concentrationMg / params.vialVolumeMl;
+                    
+                    return { 
+                        result: Math.round((params.desiredDose / mgPerMl) * 100) / 100, 
+                        unit: 'mL' 
+                    };
+
+                case 'straight_fluid':
+                    requireNumbers(['volumeMl', 'timeMinutes', 'dripSetGtt']);
+                    validateDripSet(params.dripSetGtt);
+                    
+                    return { 
+                        result: validateAndRoundDripRate((params.volumeMl / params.timeMinutes) * params.dripSetGtt), 
+                        unit: 'gtt/min' 
+                    };
+                    
+                default: 
+                    throw new Error('System error: Unknown calculation mode.');
+            }
+        }
+
+        // Execute Calculation and Update DOM
+        function runCalculation() {
+            const mode = modeSelector.value;
+            
+            // Extract numeric parameters from DOM
+            const params = {
+                desiredDose: parseFloat(inputs.desiredDose.value),
+                weightKg: parseFloat(inputs.weightKg.value),
+                concentrationMg: parseFloat(inputs.concentrationMg.value),
+                volumeMl: parseFloat(inputs.volumeMl.value),
+                vialVolumeMl: parseFloat(inputs.vialVolumeMl.value),
+                timeMinutes: parseFloat(inputs.timeMinutes.value),
+                dripSetGtt: parseFloat(inputs.dripSetGtt.value)
+            };
+
+            try {
+                const outcome = calculateClinicalDose(mode, params);
+                setSuccessState(outcome.result, outcome.unit);
+            } catch (error) {
+                if (error.message === 'Invalid or missing inputs.') {
+                    // Graceful degradation when user is still typing
+                    setNeutralState();
+                } else {
+                    // Hard constraints hit (e.g. Rate > 200, invalid inputs)
+                    setErrorState(error.message);
+                }
+            }
+        }
+
+        // Footer UI States
+        function setNeutralState() {
+            footer.className = "fixed bottom-0 w-full p-6 footer-card bg-gray-900 border-t border-gray-800 shadow-[0_-10px_20px_rgba(0,0,0,0.5)] z-20";
+            resultLabel.textContent = "Awaiting Input";
+            resultLabel.className = "text-gray-400 text-sm font-semibold uppercase tracking-wider mb-1";
+            resultValue.innerHTML = "--";
+            resultValue.className = "text-4xl font-bold text-gray-500 tracking-tight";
+            resultError.classList.add('hidden');
+        }
+
+        function setSuccessState(value, unit) {
+            footer.className = "fixed bottom-0 w-full p-6 footer-card bg-blue-900 border-t border-blue-700 shadow-[0_-10px_30px_rgba(30,58,138,0.5)] z-20";
+            resultLabel.textContent = "Infusion Target";
+            resultLabel.className = "text-blue-300 text-sm font-semibold uppercase tracking-wider mb-1";
+            resultValue.innerHTML = `${value} <span class="text-2xl text-blue-200">${unit}</span>`;
+            resultValue.className = "text-5xl font-bold text-white tracking-tight";
+            resultError.classList.add('hidden');
+            
+            // Subtle pop animation
+            resultValue.style.transform = 'scale(1.05)';
+            setTimeout(() => resultValue.style.transform = 'scale(1)', 150);
+            resultValue.style.transition = 'transform 0.15s ease-out';
+        }
+
+        function setErrorState(msg) {
+            footer.className = "fixed bottom-0 w-full p-6 footer-card bg-red-700 border-t border-red-500 shadow-[0_-10px_30px_rgba(185,28,28,0.5)] z-20";
+            resultLabel.textContent = "Warning";
+            resultLabel.className = "text-red-200 text-sm font-semibold uppercase tracking-wider mb-1";
+            resultValue.innerHTML = "ERROR";
+            resultValue.className = "text-4xl font-bold text-white tracking-tight mb-2";
+            resultError.textContent = msg;
+            resultError.classList.remove('hidden');
+        }
+
+        // Boot
+        init();
+    </script>
+</body>
+</html>
