@@ -14,7 +14,6 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom scrollbar and hide number arrows for cleaner look */
         body {
             background-color: #000000;
             color: #ffffff;
@@ -28,7 +27,6 @@
         input[type="number"] {
             -moz-appearance: textfield;
         }
-        /* Smooth transitions for UI states */
         .chip {
             transition: all 0.2s ease-in-out;
         }
@@ -62,20 +60,40 @@
         
         <!-- Desired Dose -->
         <div id="group-dose" class="input-group flex flex-col space-y-2 hidden">
-            <label class="text-gray-400 font-medium">Desired Dose <span id="label-dose-unit" class="text-blue-400"></span></label>
-            <input type="number" id="input-dose" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+            <label class="text-gray-400 font-medium">Desired Dose <span id="label-dose-suffix" class="text-blue-400"></span></label>
+            <div class="flex space-x-2">
+                <input type="number" id="input-dose" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+                <select id="input-dose-unit" class="bg-gray-800 border border-gray-700 text-white text-lg rounded-xl px-4 focus:outline-none focus:border-blue-500">
+                    <option value="mcg" selected>mcg</option>
+                    <option value="mg">mg</option>
+                    <option value="g">g</option>
+                </select>
+            </div>
         </div>
 
         <!-- Weight -->
         <div id="group-weight" class="input-group flex flex-col space-y-2 hidden">
-            <label class="text-gray-400 font-medium">Patient Weight <span class="text-blue-400">(kg)</span></label>
-            <input type="number" id="input-weight" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+            <label class="text-gray-400 font-medium">Patient Weight</label>
+            <div class="flex space-x-2">
+                <input type="number" id="input-weight" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+                <select id="input-weight-unit" class="bg-gray-800 border border-gray-700 text-white text-lg rounded-xl px-4 focus:outline-none focus:border-blue-500">
+                    <option value="kg" selected>kg</option>
+                    <option value="lbs">lbs</option>
+                </select>
+            </div>
         </div>
 
         <!-- Concentration -->
         <div id="group-concentration" class="input-group flex flex-col space-y-2 hidden">
-            <label class="text-gray-400 font-medium">Total Drug on Hand <span class="text-blue-400">(mg)</span></label>
-            <input type="number" id="input-concentration" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+            <label class="text-gray-400 font-medium">Total Drug on Hand</label>
+            <div class="flex space-x-2">
+                <input type="number" id="input-concentration" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+                <select id="input-concentration-unit" class="bg-gray-800 border border-gray-700 text-white text-lg rounded-xl px-4 focus:outline-none focus:border-blue-500">
+                    <option value="mcg">mcg</option>
+                    <option value="mg" selected>mg</option>
+                    <option value="g">g</option>
+                </select>
+            </div>
         </div>
 
         <!-- Vial Volume (For IV Push) -->
@@ -138,16 +156,20 @@
         // DOM Elements
         const modeSelector = document.getElementById('mode-selector');
         const allGroups = document.querySelectorAll('.input-group');
+        
         const inputs = {
-            desiredDose: document.getElementById('input-dose'),
-            weightKg: document.getElementById('input-weight'),
-            concentrationMg: document.getElementById('input-concentration'),
+            desiredDoseVal: document.getElementById('input-dose'),
+            desiredDoseUnit: document.getElementById('input-dose-unit'),
+            weightVal: document.getElementById('input-weight'),
+            weightUnit: document.getElementById('input-weight-unit'),
+            concentrationVal: document.getElementById('input-concentration'),
+            concentrationUnit: document.getElementById('input-concentration-unit'),
             volumeMl: document.getElementById('input-volume'),
             vialVolumeMl: document.getElementById('input-vial-volume'),
             timeMinutes: document.getElementById('input-time'),
             dripSetGtt: document.getElementById('input-drips')
         };
-        const doseUnitLabel = document.getElementById('label-dose-unit');
+        const doseSuffixLabel = document.getElementById('label-dose-suffix');
         
         const footer = document.getElementById('result-footer');
         const resultLabel = document.getElementById('result-label');
@@ -158,19 +180,19 @@
         const modeConfig = {
             weight_based_drip: {
                 fields: ['group-dose', 'group-weight', 'group-concentration', 'group-volume', 'group-drips'],
-                doseUnit: '(mcg/kg/min)'
+                doseSuffix: '/kg/min'
             },
             standard_drip: {
                 fields: ['group-dose', 'group-concentration', 'group-volume', 'group-drips'],
-                doseUnit: '(mg/min)'
+                doseSuffix: '/min'
             },
             iv_push: {
                 fields: ['group-dose', 'group-concentration', 'group-vial-volume'],
-                doseUnit: '(mg)'
+                doseSuffix: ''
             },
             straight_fluid: {
                 fields: ['group-volume', 'group-time', 'group-drips'],
-                doseUnit: '' // Unused
+                doseSuffix: ''
             }
         };
 
@@ -179,9 +201,12 @@
             modeSelector.addEventListener('change', handleModeChange);
             document.getElementById('btn-clear').addEventListener('click', clearAll);
 
-            // Listen to standard inputs
-            Object.values(inputs).forEach(input => {
-                if(input) input.addEventListener('input', runCalculation);
+            // Listen to all inputs and dropdowns for live calculations
+            Object.values(inputs).forEach(element => {
+                if(element) {
+                    element.addEventListener('input', runCalculation);
+                    element.addEventListener('change', runCalculation);
+                }
             });
 
             // Set up Quick Tap Chips
@@ -199,10 +224,8 @@
 
             chips.forEach(chip => {
                 chip.addEventListener('click', (e) => {
-                    // Update input value
                     targetInput.value = e.currentTarget.getAttribute('data-value');
                     
-                    // Highlight selected chip
                     chips.forEach(c => {
                         c.classList.remove('bg-blue-600', 'text-white', 'border-transparent');
                         c.classList.add('bg-gray-800');
@@ -210,12 +233,10 @@
                     e.currentTarget.classList.remove('bg-gray-800');
                     e.currentTarget.classList.add('bg-blue-600', 'text-white', 'border-transparent');
 
-                    // Manually trigger calculation since value changed programmatically
                     runCalculation();
                 });
             });
 
-            // If user types custom value, remove chip highlights
             if(targetInput.type !== 'hidden') {
                 targetInput.addEventListener('input', () => {
                     chips.forEach(c => {
@@ -231,39 +252,35 @@
             const mode = modeSelector.value;
             const config = modeConfig[mode];
 
-            // Hide all, then show required fields
             allGroups.forEach(group => group.classList.add('hidden'));
             config.fields.forEach(id => document.getElementById(id).classList.remove('hidden'));
 
-            // Update Dynamic Labels
-            if (config.doseUnit) {
-                doseUnitLabel.textContent = config.doseUnit;
+            if (config.doseSuffix !== undefined) {
+                doseSuffixLabel.textContent = config.doseSuffix;
             }
 
-            // Clear inputs and result when switching modes for safety
             clearAllInputs();
             setNeutralState();
         }
 
         function clearAll() {
             clearAllInputs();
-            
-            // Reset chips
             document.querySelectorAll('.chip').forEach(c => {
                 c.classList.remove('bg-blue-600', 'text-white', 'border-transparent');
                 c.classList.add('bg-gray-800');
             });
-            
             setNeutralState();
         }
 
         function clearAllInputs() {
-            Object.values(inputs).forEach(input => {
-                if (input) input.value = '';
+            Object.values(inputs).forEach(element => {
+                if (element && element.tagName === 'INPUT') {
+                    element.value = '';
+                }
             });
         }
 
-        // Core Logic Provided by User
+        // Core Calculation Logic
         function calculateClinicalDose(mode, params) {
             const requireNumbers = (keys) => {
                 for (const key of keys) {
@@ -283,34 +300,47 @@
                 return roundedRate;
             };
 
+            // Normalize Concentration to mg
+            let concentrationMg = params.concentrationVal;
+            if (params.concentrationUnit === 'mcg') concentrationMg = params.concentrationVal / 1000;
+            else if (params.concentrationUnit === 'g') concentrationMg = params.concentrationVal * 1000;
+
+            // Normalize Dose to mg
+            let doseMg = params.desiredDoseVal;
+            if (params.desiredDoseUnit === 'mcg') doseMg = params.desiredDoseVal / 1000;
+            else if (params.desiredDoseUnit === 'g') doseMg = params.desiredDoseVal * 1000;
+
+            // Normalize Weight to kg
+            let weightKg = params.weightVal;
+            if (params.weightUnit === 'lbs') weightKg = params.weightVal / 2.2;
+
             switch (mode) {
                 case 'weight_based_drip':
-                    requireNumbers(['desiredDose', 'weightKg', 'volumeMl', 'concentrationMg', 'dripSetGtt']);
+                    requireNumbers(['desiredDoseVal', 'weightVal', 'volumeMl', 'concentrationVal', 'dripSetGtt']);
                     validateDripSet(params.dripSetGtt);
-                    if (params.weightKg > 600 || params.volumeMl > 2000) throw new Error("Parameters exceed max safety limits.");
+                    if (weightKg > 600 || params.volumeMl > 2000) throw new Error("Parameters exceed max safety limits.");
                     
-                    const concentrationMcg = params.concentrationMg * 1000;
                     return { 
-                        result: validateAndRoundDripRate((params.desiredDose * params.weightKg * params.volumeMl / concentrationMcg) * params.dripSetGtt), 
+                        result: validateAndRoundDripRate((doseMg * weightKg * params.volumeMl / concentrationMg) * params.dripSetGtt), 
                         unit: 'gtt/min' 
                     };
 
                 case 'standard_drip':
-                    requireNumbers(['desiredDose', 'volumeMl', 'concentrationMg', 'dripSetGtt']);
+                    requireNumbers(['desiredDoseVal', 'volumeMl', 'concentrationVal', 'dripSetGtt']);
                     validateDripSet(params.dripSetGtt);
                     if (params.volumeMl > 2000) throw new Error("Parameters exceed max safety limits.");
                     
                     return { 
-                        result: validateAndRoundDripRate((params.desiredDose * params.volumeMl / params.concentrationMg) * params.dripSetGtt), 
+                        result: validateAndRoundDripRate((doseMg * params.volumeMl / concentrationMg) * params.dripSetGtt), 
                         unit: 'gtt/min' 
                     };
 
                 case 'iv_push':
-                    requireNumbers(['desiredDose', 'concentrationMg', 'vialVolumeMl']);
-                    const mgPerMl = params.concentrationMg / params.vialVolumeMl;
+                    requireNumbers(['desiredDoseVal', 'concentrationVal', 'vialVolumeMl']);
+                    const mgPerMl = concentrationMg / params.vialVolumeMl;
                     
                     return { 
-                        result: Math.round((params.desiredDose / mgPerMl) * 100) / 100, 
+                        result: Math.round((doseMg / mgPerMl) * 100) / 100, 
                         unit: 'mL' 
                     };
 
@@ -332,11 +362,13 @@
         function runCalculation() {
             const mode = modeSelector.value;
             
-            // Extract numeric parameters from DOM
             const params = {
-                desiredDose: parseFloat(inputs.desiredDose.value),
-                weightKg: parseFloat(inputs.weightKg.value),
-                concentrationMg: parseFloat(inputs.concentrationMg.value),
+                desiredDoseVal: parseFloat(inputs.desiredDoseVal.value),
+                desiredDoseUnit: inputs.desiredDoseUnit.value,
+                weightVal: parseFloat(inputs.weightVal.value),
+                weightUnit: inputs.weightUnit.value,
+                concentrationVal: parseFloat(inputs.concentrationVal.value),
+                concentrationUnit: inputs.concentrationUnit.value,
                 volumeMl: parseFloat(inputs.volumeMl.value),
                 vialVolumeMl: parseFloat(inputs.vialVolumeMl.value),
                 timeMinutes: parseFloat(inputs.timeMinutes.value),
@@ -348,10 +380,8 @@
                 setSuccessState(outcome.result, outcome.unit);
             } catch (error) {
                 if (error.message === 'Invalid or missing inputs.') {
-                    // Graceful degradation when user is still typing
                     setNeutralState();
                 } else {
-                    // Hard constraints hit (e.g. Rate > 200, invalid inputs)
                     setErrorState(error.message);
                 }
             }
@@ -375,7 +405,6 @@
             resultValue.className = "text-5xl font-bold text-white tracking-tight";
             resultError.classList.add('hidden');
             
-            // Subtle pop animation
             resultValue.style.transform = 'scale(1.05)';
             setTimeout(() => resultValue.style.transform = 'scale(1)', 150);
             resultValue.style.transition = 'transform 0.15s ease-out';
