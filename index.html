@@ -47,7 +47,8 @@
             <select id="mode-selector" class="w-full bg-gray-900 border border-gray-700 text-white text-lg rounded-lg block p-3 appearance-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 <option value="weight_based_drip">Weight-Based Drip</option>
                 <option value="standard_drip">Standard Drip (Non-Weight)</option>
-                <option value="iv_push">Direct IV Push</option>
+                <option value="weight_based_single">Weight-Based Single Dose (Push/IM)</option>
+                <option value="basic_single">Basic Single Dose (Push/IM)</option>
                 <option value="straight_fluid">Straight Fluid Bolus</option>
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
@@ -83,11 +84,11 @@
             </div>
         </div>
 
-        <!-- Concentration -->
+        <!-- Medication on Hand (Amount) -->
         <div id="group-concentration" class="input-group flex flex-col space-y-2 hidden">
-            <label class="text-gray-400 font-medium">Total Drug on Hand</label>
+            <label class="text-gray-400 font-medium">Medication on Hand <span class="text-blue-400">(Total Amount)</span></label>
             <div class="flex space-x-2">
-                <input type="number" id="input-concentration" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+                <input type="number" id="input-concentration" inputmode="decimal" placeholder="e.g., 500" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
                 <select id="input-concentration-unit" class="bg-gray-800 border border-gray-700 text-white text-lg rounded-xl px-4 focus:outline-none focus:border-blue-500">
                     <option value="mcg">mcg</option>
                     <option value="mg" selected>mg</option>
@@ -96,10 +97,10 @@
             </div>
         </div>
 
-        <!-- Vial Volume (For IV Push) -->
+        <!-- In Volume (mL) -->
         <div id="group-vial-volume" class="input-group flex flex-col space-y-2 hidden">
-            <label class="text-gray-400 font-medium">Vial Volume <span class="text-blue-400">(mL)</span></label>
-            <input type="number" id="input-vial-volume" inputmode="decimal" placeholder="0" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
+            <label class="text-gray-400 font-medium">In Volume <span class="text-blue-400">(mL)</span></label>
+            <input type="number" id="input-vial-volume" inputmode="decimal" placeholder="e.g., 10" class="bg-gray-900 border border-gray-800 text-white p-4 rounded-xl text-2xl font-semibold w-full focus:outline-none focus:border-blue-500">
         </div>
 
         <!-- Bag Volume / Total Fluid -->
@@ -186,7 +187,11 @@
                 fields: ['group-dose', 'group-concentration', 'group-volume', 'group-drips'],
                 doseSuffix: '/min'
             },
-            iv_push: {
+            weight_based_single: {
+                fields: ['group-dose', 'group-weight', 'group-concentration', 'group-vial-volume'],
+                doseSuffix: '/kg'
+            },
+            basic_single: {
                 fields: ['group-dose', 'group-concentration', 'group-vial-volume'],
                 doseSuffix: ''
             },
@@ -335,12 +340,24 @@
                         unit: 'gtt/min' 
                     };
 
-                case 'iv_push':
-                    requireNumbers(['desiredDoseVal', 'concentrationVal', 'vialVolumeMl']);
-                    const mgPerMl = concentrationMg / params.vialVolumeMl;
+                case 'weight_based_single':
+                    requireNumbers(['desiredDoseVal', 'weightVal', 'concentrationVal', 'vialVolumeMl']);
+                    if (weightKg > 600) throw new Error("Weight exceeds max safety limits.");
+                    
+                    const singleMgPerMl = concentrationMg / params.vialVolumeMl;
+                    const totalDoseMg = doseMg * weightKg;
                     
                     return { 
-                        result: Math.round((doseMg / mgPerMl) * 100) / 100, 
+                        result: Math.round((totalDoseMg / singleMgPerMl) * 100) / 100, 
+                        unit: 'mL' 
+                    };
+
+                case 'basic_single':
+                    requireNumbers(['desiredDoseVal', 'concentrationVal', 'vialVolumeMl']);
+                    const basicMgPerMl = concentrationMg / params.vialVolumeMl;
+                    
+                    return { 
+                        result: Math.round((doseMg / basicMgPerMl) * 100) / 100, 
                         unit: 'mL' 
                     };
 
