@@ -69,6 +69,11 @@
                     <option value="mg">mg</option>
                     <option value="g">g</option>
                 </select>
+                <!-- New Time Toggle for Drips -->
+                <select id="input-dose-time" class="bg-gray-800 border border-gray-700 text-white text-lg rounded-xl px-4 focus:outline-none focus:border-blue-500 hidden">
+                    <option value="min" selected>/min</option>
+                    <option value="hr">/hr</option>
+                </select>
             </div>
         </div>
 
@@ -161,6 +166,7 @@
         const inputs = {
             desiredDoseVal: document.getElementById('input-dose'),
             desiredDoseUnit: document.getElementById('input-dose-unit'),
+            desiredDoseTime: document.getElementById('input-dose-time'),
             weightVal: document.getElementById('input-weight'),
             weightUnit: document.getElementById('input-weight-unit'),
             concentrationVal: document.getElementById('input-concentration'),
@@ -181,23 +187,28 @@
         const modeConfig = {
             weight_based_drip: {
                 fields: ['group-dose', 'group-weight', 'group-concentration', 'group-volume', 'group-drips'],
-                doseSuffix: '/kg/min'
+                doseSuffix: '(/kg)',
+                showTimeToggle: true
             },
             standard_drip: {
                 fields: ['group-dose', 'group-concentration', 'group-volume', 'group-drips'],
-                doseSuffix: '/min'
+                doseSuffix: '',
+                showTimeToggle: true
             },
             weight_based_single: {
                 fields: ['group-dose', 'group-weight', 'group-concentration', 'group-vial-volume'],
-                doseSuffix: '/kg'
+                doseSuffix: '(/kg)',
+                showTimeToggle: false
             },
             basic_single: {
                 fields: ['group-dose', 'group-concentration', 'group-vial-volume'],
-                doseSuffix: ''
+                doseSuffix: '',
+                showTimeToggle: false
             },
             straight_fluid: {
                 fields: ['group-volume', 'group-time', 'group-drips'],
-                doseSuffix: ''
+                doseSuffix: '',
+                showTimeToggle: false
             }
         };
 
@@ -264,6 +275,12 @@
                 doseSuffixLabel.textContent = config.doseSuffix;
             }
 
+            if (config.showTimeToggle) {
+                inputs.desiredDoseTime.classList.remove('hidden');
+            } else {
+                inputs.desiredDoseTime.classList.add('hidden');
+            }
+
             clearAllInputs();
             setNeutralState();
         }
@@ -314,6 +331,11 @@
             let doseMg = params.desiredDoseVal;
             if (params.desiredDoseUnit === 'mcg') doseMg = params.desiredDoseVal / 1000;
             else if (params.desiredDoseUnit === 'g') doseMg = params.desiredDoseVal * 1000;
+
+            // Normalize time: If a drip is ordered per hour, divide the dose by 60 to find the per-minute dose
+            if ((mode === 'weight_based_drip' || mode === 'standard_drip') && params.desiredDoseTime === 'hr') {
+                doseMg = doseMg / 60;
+            }
 
             // Normalize Weight to kg
             let weightKg = params.weightVal;
@@ -382,6 +404,7 @@
             const params = {
                 desiredDoseVal: parseFloat(inputs.desiredDoseVal.value),
                 desiredDoseUnit: inputs.desiredDoseUnit.value,
+                desiredDoseTime: inputs.desiredDoseTime.value,
                 weightVal: parseFloat(inputs.weightVal.value),
                 weightUnit: inputs.weightUnit.value,
                 concentrationVal: parseFloat(inputs.concentrationVal.value),
